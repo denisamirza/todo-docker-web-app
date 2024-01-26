@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 
 // Connect to MongoDB
-mongoose.connect('mongodb+srv://nokia_labs:nokia_labs@cluster0.5iqfe.mongodb.net/todo2?retryWrites=true&w=majority', {
+mongoose.connect('mongodb://my-mongodb:27017/todo', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
