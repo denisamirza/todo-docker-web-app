@@ -1,9 +1,8 @@
-ARG DATABASE_URL="my-mongodb:27017"
-
 FROM node AS base
+ARG DATABASE_URL="my-mongodb:27017"
 WORKDIR /usr/src/app
 COPY index.js .
-RUN sed -i "s/my-mongodb:27017/${DATABASE_URL}/g" index.js
+RUN sed -i "s/my-mongodb:27017/$DATABASE_URL/g" index.js
 
 FROM base AS install
 RUN npm install express cors mongoose

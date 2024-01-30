@@ -1,5 +1,5 @@
-ARG BACKEND_URL="localhost:3000"
 FROM nginx:latest
+ARG BACKEND_URL="localhost:3000"
 EXPOSE 80
 WORKDIR /usr/share/nginx/html
 COPY index.html .
