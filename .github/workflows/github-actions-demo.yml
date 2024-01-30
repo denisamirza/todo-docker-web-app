@@ -46,4 +46,12 @@ jobs:
       - name: Connect to kubernetes
         run: |
           mkdir ~/.kube
-          echo $ {{secrets.TARGET_KUBECONFIG}} | ~/.kube/config
+          echo ${{secrets.TARGET_KUBECONFIG}} | base64 -d > ~/.kube/config
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+          kubectl version --client
+          kubectl config set-context --current --namespace=deni
+          kubectl get all
+
