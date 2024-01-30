@@ -6,13 +6,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
+
       - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
+
       - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+
       - name: Check out repository code
         uses: actions/checkout@v4
+      
       - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
       - run: echo "🖥️ The workflow is now ready to test your code on the runner."
       - name: List files in the repository
         run: |
           ls ${{ github.workspace }}
+          echo "nrt"
+          var="äsd"
+          echo "$var"
       - run: echo "🍏 This job's status is ${{ job.status }}."
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+        
+      - name: Build and push frontend Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest ./frontend
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest
+          docker build --build-arg BACKEND_URL="backend.deni-dns.com" -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:kubernetes ./frontend
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-frontend:kubernetes
+      - name: Build and push backend Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-backend:latest ./backend
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-backend:latest
+          docker build --build-arg DATABASE_URL="my-database-service" -t ${{ secrets.DOCKER_USERNAME }}/my-backend:kubernetes ./backend
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-backend:kubernetes
+
+      - name: Build and push database Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-database:latest ./database
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-database:latest
+      - name: Connect to kubernetes
+        run: |
+          mkdir ~/.kube
+          echo $ {{secrets.TARGET_KUBECONFIG}} | ~/.kube/config
