@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: my-frontend
-        image: deni1999/my-frontend:latest
+        image: deni1999/my-frontend:kubernetes
         ports:
         - containerPort: 80
         imagePullPolicy: Always
