@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-database
+  labels:
+    app: my-database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-database
+  template:
+    metadata:
+      labels:
+        app: my-database
+    spec:
+      containers:
+      - name: my-database
+        image: deni1999/my-database:latest
+        ports:
+        - containerPort: 27017
+        volumeMounts:
+        - name: my-database
+          mountPath: /data/db
+      volumes:
+      - name: my-database
+        hostPath:
+          path: /root/volumes/deni/database/data
+          type: Directory

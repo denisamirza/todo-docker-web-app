@@ -2,13 +2,19 @@ services:
   my-frontend:
     restart: unless-stopped
     image: my-frontend
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: "localhost:3000"
     ports:
       - 8080:80/tcp
   my-backend:
     restart: unless-stopped
     image: my-backend
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        DATABASE_URL: "my-mongodb:27017"
     ports:
       - 3000:3000/tcp
     networks:
