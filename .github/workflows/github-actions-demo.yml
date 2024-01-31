@@ -28,20 +28,20 @@ jobs:
         
       - name: Build and push frontend Docker image
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest ./frontend
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest ./docker-deployment/frontend
           docker push ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest
-          docker build --build-arg BACKEND_URL="backend.deni-dns.com" -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:kubernetes ./frontend
+          docker build --build-arg BACKEND_URL="backend.deni-dns.com" -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:kubernetes ./docker-deployment/frontend
           docker push ${{ secrets.DOCKER_USERNAME }}/my-frontend:kubernetes
       - name: Build and push backend Docker image
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-backend:latest ./backend
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-backend:latest ./docker-deployment/backend
           docker push ${{ secrets.DOCKER_USERNAME }}/my-backend:latest
-          docker build --build-arg DATABASE_URL="my-database-service" -t ${{ secrets.DOCKER_USERNAME }}/my-backend:kubernetes ./backend
+          docker build --build-arg DATABASE_URL="my-database-service" -t ${{ secrets.DOCKER_USERNAME }}/my-backend:kubernetes ./docker-deployment/backend
           docker push ${{ secrets.DOCKER_USERNAME }}/my-backend:kubernetes
 
       - name: Build and push database Docker image
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-database:latest ./database
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-database:latest ./docker-deployment/database
           docker push ${{ secrets.DOCKER_USERNAME }}/my-database:latest
       - name: Connect to kubernetes
         run: |
@@ -53,5 +53,5 @@ jobs:
           sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
           kubectl version --client
           kubectl config set-context --current --namespace=deni
-          kubectl get all
+          kubectl delete pod --all
 

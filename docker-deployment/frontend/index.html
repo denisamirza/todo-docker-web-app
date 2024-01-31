@@ -103,7 +103,7 @@ input {
 
 <script>
 
-    fetch('http://backend.deni-dns.com/getItems')
+    fetch('http://localhost:3000/getItems')
       .then(response => response.json())
       .then(data => {
         console.log(data);
@@ -135,7 +135,7 @@ function newElement() {
       const data = {
         item: inputValue
       };
-      fetch('http://backend.deni-dns.com/addItem', {
+      fetch('http://localhost:3000/addItem', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
