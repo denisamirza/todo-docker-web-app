@@ -1,0 +1,36 @@
+services:
+  my-frontend:
+    restart: unless-stopped
+    image: my-frontend
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: "localhost:3000"
+    ports:
+      - 8080:80/tcp
+  my-backend:
+    restart: unless-stopped
+    image: my-backend
+    build:
+      context: ./backend
+      args:
+        DATABASE_URL: "my-mongodb:27017"
+    ports:
+      - 3000:3000/tcp
+    networks:
+      - my-network
+  my-database:
+    restart: unless-stopped
+    container_name: my-mongodb
+    image: my-database
+    build: ./database
+    ports:
+      - 27017:27017
+    volumes:
+      - ./database/data:/data/db
+    networks:
+      - my-network
+
+networks:
+  my-network:
+    driver: bridge
