@@ -151,11 +151,10 @@ resource "aws_instance" "frontend" {
   user_data = <<-EOF
               #!/bin/bash -ex
               sudo yum update -y
-              sudo yum install git -y
               sudo yum install docker -y
               sudo service docker start
               sudo usermod -a -G docker ec2-user
-              git clone https://github.com/denisamirza/todo-docker-web-app.git
+              docker run --rm -d -p 80:80 --name my-frontend deni1999/my-frontend:aws
               EOF
 
   tags = {
@@ -175,11 +174,10 @@ resource "aws_instance" "backend" {
   user_data = <<-EOF
               #!/bin/bash -ex
               sudo yum update -y
-              sudo yum install git -y
               sudo yum install docker -y
               sudo service docker start
               sudo usermod -a -G docker ec2-user
-              git clone https://github.com/denisamirza/todo-docker-web-app.git
+              docker run --rm -d -p 80:3000 --name my-backend deni1999/my-backend:aws
               EOF
 
   tags = {
@@ -217,6 +215,7 @@ resource "aws_instance" "database" {
               sudo yum install docker -y
               sudo service docker start
               sudo usermod -a -G docker ec2-user
+              docker run --rm -d -p 27017:27017 -v /database/data:/data/db --name my-backend deni1999/my-database:latest
               EOF
 
   tags = {
