@@ -198,6 +198,21 @@ resource "aws_instance" "database" {
 
   user_data = <<-EOF
               #!/bin/bash -ex
+              mkdir database
+              mkdir database/data
+              function check_reachability {
+                  ping -c 1 $1 > /dev/null  # Ping the IP address once and redirect output to /dev/null
+              }
+
+              # Public IP address to ping
+              public_ip="8.8.8.8"
+
+              # Wait until the public IP address becomes reachable
+              while ! check_reachability $public_ip; do
+                  echo "Waiting for $public_ip to become reachable..."
+                  sleep 400  # Wait for 400 seconds before checking again
+              done
+
               sudo yum update -y
               sudo yum install docker -y
               sudo service docker start
@@ -222,11 +237,33 @@ resource "aws_nat_gateway" "my-nat" {
   }
 }
 
-resource "null_resource" "copy_file" {
+resource "null_resource" "copy_ssh_key_to_backend" {
   provisioner "local-exec" {
-    command = "scp -i /home/deni/.ssh/id_rsa -r /home/deni/.ssh ec2-user@${aws_instance.backend.public_ip}:/home/ec2-user"
+    command = <<-EOT
+      #!/bin/bash
+
+      # Function to get the instance state
+      get_instance_state() {
+          terraform state show aws_instance.backend | grep instance_state | awk '{print $NF}'
+      }
+
+      # Wait for the instance to reach "running" state
+      while true; do
+          instance_state=$(get_instance_state)
+          echo DENII $instance_state
+          if [[ "$instance_state" == *"running"* ]]; then
+              break
+          fi
+          sleep 10  # Wait for 10 seconds before checking again
+      done
+
+      # Copy SSH keys to the backend EC2 instance
+      scp -i /home/deni/.ssh/id_rsa -r /home/deni/.ssh ec2-user@${aws_instance.backend.public_ip}:/home/ec2-user
+    EOT
+
+    interpreter = ["/bin/bash", "-c"]
   }
-  
+
   depends_on = [aws_instance.backend]
 }
 
