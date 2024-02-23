@@ -8,7 +8,6 @@ jobs:
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
 
       - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-
       - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
 
       - name: Check out repository code
@@ -25,7 +24,23 @@ jobs:
       - run: echo "🍏 This job's status is ${{ job.status }}."
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-        
+      - name: Configure ssh key for connecting to the ec2 instances
+        run: |
+          mkdir -p /home/runner/.ssh
+
+          echo "${{secrets.SSH_PUB_KEY}}" | base64 -d > /home/runner/.ssh/id_rsa.pub
+          echo "${{secrets.SSH_PRIVATE_KEY}}" | base64 -d > /home/runner/.ssh/id_rsa
+          chmod 600 /home/runner/.ssh/id_rsa.pub
+          chmod 600 /home/runner/.ssh/id_rsa   
+      - name: Refresh frontend container
+        run: |
+          cat /home/runner/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.FRONTEND_DNS }} >> ~/.ssh/known_hosts
+          ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ secrets.FRONTEND_DNS }} "docker stop my-frontend"
+          ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ secrets.FRONTEND_DNS }} "docker pull ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws"
+          ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ secrets.FRONTEND_DNS }} "docker run --rm -d -p 80:80 --name my-frontend ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws"
+        env:
+          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
       - name: Build and push frontend Docker image
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest ./docker-deployment/frontend
@@ -50,6 +65,18 @@ jobs:
         run: |
           mkdir ~/.kube
           echo ${{secrets.TARGET_KUBECONFIG}} | base64 -d > ~/.kube/config
+
+
+      - name: Refresh frontend container
+        run: |
+          ssh -i /home/runner/.ssh ec2-user@${{ secrets.FRONTEND_DNS }} "docker stop my-frontend"
+          ssh -i /home/runner/.ssh ec2-user@${{ secrets.FRONTEND_DNS }} "docker pull ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws"
+          ssh -i /home/runner/.ssh ec2-user@${{ secrets.FRONTEND_DNS }} "docker run --rm -d -p 80:80 --name my-frontend ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws"
+      - name: Refresh backend container
+        run: |
+          ssh -i /home/runner/.ssh ec2-user@${{ secrets.BACKEND_DNS }} "docker stop my-database"
+          ssh -i /home/runner/.ssh ec2-user@${{ secrets.BACKEND_DNS }} "docker pull ${{ secrets.DOCKER_USERNAME }}/my-database:aws"
+          ssh -i /home/runner/.ssh ec2-user@${{ secrets.BACKEND_DNS }} "docker run --rm -d  -p 27017:27017 -v /database/data:/data/db --name my-database ${{ secrets.DOCKER_USERNAME }}/my-database:aws"
       - name: Install kubectl
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -57,27 +84,3 @@ jobs:
           kubectl version --client
           kubectl config set-context --current --namespace=deni
           kubectl delete pod --all
-      - name: Configure ssh key for connecting to the ec2 instances
-        run: |
-          echo ${{secrets.SSH_PUB_KEY}} | base64 -d > ~/.ssh/id_rsa.pub
-          echo ${{secrets.SSH_PRIVATE_KEY}} | base64 -d > ~/.ssh/id_rsa
-      - name: Connecting to ec2 that hosts the frontend and refresh container
-        run: |
-          mkdir ~/.ssh
-          echo ${{secrets.SSH_PUB_KEY}} | base64 -d > ~/.ssh/id_rsa.pub
-          echo ${{secrets.SSH_PRIVATE_KEY}} | base64 -d > ~/.ssh/id_rsa
-      - name: Refresh frontend container
-        run: |
-          ssh ec2-user@secrets.FRONTEND_DNS
-          docker stop my-frontend
-          docker pull ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws
-          docker run --rm -d -p 80:80 --name my-frontend ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws
-          exit
-      - name: Refresh backend container
-        run: |
-          ssh ec2-user@secrets.BACKEND_DNS
-          docker stop my-database
-          docker pull ${{ secrets.DOCKER_USERNAME }}/my-database:aws
-          docker run --rm -d  -p 27017:27017 -v /database/data:/data/db --name my-database ${{ secrets.DOCKER_USERNAME }}/my-database:aws
-          exit
-
