@@ -1,3 +1,11 @@
+terraform {
+  backend "s3" {
+    bucket = "terraform-state-denisa-bucket"
+    key    = "terraform-tfstate"
+    region = "us-east-1"
+  }
+}
+
 provider "aws" {
     region = "us-east-1"
 }
@@ -137,7 +145,7 @@ resource "aws_security_group" "database-sg" {
 
 resource "aws_key_pair" "key" {
     key_name = "my-key"
-    public_key = file("/home/deni/.ssh/id_rsa.pub")
+    public_key = file("/home/runner/.ssh/id_rsa.pub")
 }
 
 resource "aws_instance" "frontend" {
@@ -277,4 +285,3 @@ output "backend_public_ip" {
 output "database_private_ip" {
   value = aws_instance.database.private_ip
 }
-

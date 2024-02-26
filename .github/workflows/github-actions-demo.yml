@@ -13,7 +13,7 @@ jobs:
 
       - name: Check out repository code
         uses: actions/checkout@v4
-      
+
       - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
       - run: echo "🖥️ The workflow is now ready to test your code on the runner."
       - name: List files in the repository
@@ -23,32 +23,9 @@ jobs:
           var="äsd"
           echo "$var"
       - run: echo "🍏 This job's status is ${{ job.status }}."
-      - name: Login to Docker Hub
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-      - name: Build and push frontend Docker image
-        run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest ./docker-deployment/frontend
-          docker push ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest
-          docker build --build-arg BACKEND_URL="backend.deni-dns.com" -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:kubernetes ./docker-deployment/frontend
-          docker push ${{ secrets.DOCKER_USERNAME }}/my-frontend:kubernetes
-          docker build --build-arg BACKEND_URL="${{ secrets.BACKEND_DNS }}" -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws ./docker-deployment/frontend
-          docker push ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws
-      - name: Build and push backend Docker image
-        run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-backend:latest ./docker-deployment/backend
-          docker push ${{ secrets.DOCKER_USERNAME }}/my-backend:latest
-          docker build --build-arg DATABASE_URL="my-database-service" -t ${{ secrets.DOCKER_USERNAME }}/my-backend:kubernetes ./docker-deployment/backend
-          docker push ${{ secrets.DOCKER_USERNAME }}/my-backend:kubernetes
-          docker build --build-arg DATABASE_URL="${{ secrets.DATABASE_DNS }}:27017" -t ${{ secrets.DOCKER_USERNAME }}/my-backend:aws ./docker-deployment/backend
-          docker push ${{ secrets.DOCKER_USERNAME }}/my-backend:aws
-      - name: Build and push database Docker image
-        run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-database:latest ./docker-deployment/database
-          docker push ${{ secrets.DOCKER_USERNAME }}/my-database:latest
-      - name: Connect to kubernetes
-        run: |
-          mkdir ~/.kube
-          echo ${{secrets.TARGET_KUBECONFIG}} | base64 -d > ~/.kube/config
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
 
       - name: Configure ssh key for connecting to the ec2 instances
         run: |
@@ -57,24 +34,74 @@ jobs:
           echo "${{secrets.SSH_PUB_KEY}}" | base64 -d > /home/runner/.ssh/id_rsa.pub
           echo "${{secrets.SSH_PRIVATE_KEY}}" | base64 -d > /home/runner/.ssh/id_rsa
           chmod 600 /home/runner/.ssh/id_rsa.pub
-          chmod 600 /home/runner/.ssh/id_rsa   
-      - name: Refresh frontend container
+          chmod 600 /home/runner/.ssh/id_rsa
+      - name: Extract ec2 ip's
+        id: extract-ip
         run: |
-          ssh-keyscan -H ${{ secrets.FRONTEND_DNS }} >> ~/.ssh/known_hosts
-          ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ secrets.FRONTEND_DNS }} "docker stop my-frontend"
-          ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ secrets.FRONTEND_DNS }} "docker pull ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws"
-          ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ secrets.FRONTEND_DNS }} "docker run --rm -d -p 80:80 --name my-frontend ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws"
+          cd aws-deployment
+          export AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+          export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          terraform init
+          terraform plan
+          terraform apply -auto-approve
+          echo "frontend_ip=$(terraform output frontend_public_ip)" >> "$GITHUB_OUTPUT"
+          echo "backend_ip=$(terraform output backend_public_ip)" >> "$GITHUB_OUTPUT"
+          echo "database_ip=$(terraform output database_private_ip)" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+      - name: Build and push frontend Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest ./docker-deployment/frontend
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest
+          docker build --build-arg BACKEND_URL="backend.deni-dns.com" -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:kubernetes ./docker-deployment/frontend
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-frontend:kubernetes
+          docker build --build-arg BACKEND_URL="${{ steps.extract-ip.outputs.backend_ip }}" -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws ./docker-deployment/frontend
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws
+      - name: Build and push backend Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-backend:latest ./docker-deployment/backend
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-backend:latest
+          docker build --build-arg DATABASE_URL="my-database-service" -t ${{ secrets.DOCKER_USERNAME }}/my-backend:kubernetes ./docker-deployment/backend
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-backend:kubernetes
+          docker build --build-arg DATABASE_URL="${{ steps.extract-ip.outputs.database_ip }}:27017" -t ${{ secrets.DOCKER_USERNAME }}/my-backend:aws ./docker-deployment/backend
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-backend:aws
+      - name: Build and push database Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-database:latest ./docker-deployment/database
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-database:latest
+      - name: Connect to kubernetes
+        run: |
+          mkdir ~/.kube
+          echo "${{ secrets.TARGET_KUBECONFIG }}" | base64 -d > ~/.kube/config
+
+      - name: Refresh frontend container from EC2
+        run: |
+          ssh-keyscan -H ${{ steps.extract-ip.outputs.frontend_ip }} >> ~/.ssh/known_hosts
+          CONTAINER_ID=$(ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ steps.extract-ip.outputs.frontend_ip }} "docker ps -aqf 'name=my-frontend'")
+          if [ ! -z "$CONTAINER_ID" ]; then
+            ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ steps.extract-ip.outputs.frontend_ip }} "docker stop my-frontend"
+          else
+            echo "Container does not exist."
+          fi
+          ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ steps.extract-ip.outputs.frontend_ip }} "docker pull ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws"
+          ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ steps.extract-ip.outputs.frontend_ip }} "docker run --rm -d -p 80:80 --name my-frontend ${{ secrets.DOCKER_USERNAME }}/my-frontend:aws"
         env:
           SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-      - name: Refresh backend container
+      - name: Refresh backend container from EC2
         run: |
-         ssh-keyscan -H ${{ secrets.BACKEND_DNS }} >> ~/.ssh/known_hosts
-          ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ secrets.BACKEND_DNS }} "docker stop my-backend"
-          ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ secrets.BACKEND_DNS }} "docker pull ${{ secrets.DOCKER_USERNAME }}/my-backend:aws"
-          ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ secrets.BACKEND_DNS }} "docker run --rm -d  -p 80:3000 --name my-backend ${{ secrets.DOCKER_USERNAME }}/my-backend:aws"
+          ssh-keyscan -H ${{ steps.extract-ip.outputs.backend_ip }} >> ~/.ssh/known_hosts
+          CONTAINER_ID=$(ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ steps.extract-ip.outputs.backend_ip }} "docker ps -aqf 'name=my-backend'")
+          if [ ! -z "$CONTAINER_ID" ]; then
+            ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ steps.extract-ip.outputs.backend_ip }} "docker stop my-backend"
+          else
+            echo "Container does not exist."
+          fi
+          ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ steps.extract-ip.outputs.backend_ip }} "docker pull ${{ secrets.DOCKER_USERNAME }}/my-backend:aws"
+          ssh -i /home/runner/.ssh/id_rsa ec2-user@${{ steps.extract-ip.outputs.backend_ip }} "docker run --rm -d  -p 80:3000 --name my-backend ${{ secrets.DOCKER_USERNAME }}/my-backend:aws"
         env:
           SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-      - name: Install kubectl
+      - name: Install kubectl and configure existing pods
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
