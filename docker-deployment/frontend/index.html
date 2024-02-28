@@ -103,7 +103,7 @@ input {
 
 <script>
 
-    fetch('http://localhost:3000/getItems')
+    fetch('http://79.114.22.104:3001/getItems')
       .then(response => response.json())
       .then(data => {
         console.log(data);
@@ -135,7 +135,7 @@ function newElement() {
       const data = {
         item: inputValue
       };
-      fetch('http://localhost:3000/addItem', {
+      fetch('http://79.114.22.104:3001/addItem', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

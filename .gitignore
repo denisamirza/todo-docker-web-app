@@ -1,0 +1,5 @@
+aws-deployment/.terraform.lock.hcl
+aws-deployment/.terraform/
+aws-deployment/artifactory/
+aws-deployment/terraform.tfstate.backup
+docker-deployment/database/data/
